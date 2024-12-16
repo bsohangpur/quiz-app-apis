@@ -1,5 +1,4 @@
-from models.base import init_db, engine, Base
-from models.models import Subject, Topic, QuestionType, QuestionSet
+from models.models import  User, Session, Question, Base, engine
 
 def setup_database():
     print("Creating database tables...")
