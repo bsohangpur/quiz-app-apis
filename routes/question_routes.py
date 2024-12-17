@@ -6,6 +6,7 @@ from typing import List, Dict
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
+import json
 
 question_bp = Blueprint("questions", __name__)
 llm_service = LLMService(provider="openai")  # or "openai"
@@ -148,21 +149,37 @@ def get_questions(quiz_id):
             question_data = {
                 "question": question.question,
                 "type": question.type,
-                "answer": question.answer,
+                "answer": question.get_answer(),
                 "explanation": question.explanation,
             }
 
             # Add type-specific data
-            if question.type == "mcq":
+            if question.type == "MCQ":
                 question_data["options"] = question.get_options()
             elif question.type == "match_the_following":
-                question_data["match_the_following_pairs"] = question.get_match_pairs()
+                pairs = question.get_match_pairs()
+                if isinstance(pairs, dict):
+                    question_data["match_the_following_pairs"] = {
+                        "left": pairs.get("left", []),
+                        "right": pairs.get("right", [])
+                    }
+                    # Convert string answer back to dict if needed
+                    answer = question.get_answer()
+                    if isinstance(answer, str) and answer.startswith('{'):
+                        try:
+                            answer = json.loads(answer.replace("'", '"'))
+                        except:
+                            pass
+                    question_data["answer"] = answer
             elif question.type == "sequence":
                 question_data["sequence_items"] = question.get_sequence_items()
 
             question_list.append(question_data)
 
-        return jsonify({"success": True, "questions": question_list})
+        return jsonify({
+            "success": True,
+            "questions": question_list
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

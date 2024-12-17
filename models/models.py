@@ -47,9 +47,12 @@ class QuestionModel(Base):
 
     def get_answer(self):
         """Deserialize answer based on question type"""
-        if self.type in ["sequence", "match_the_following"]:
+        if self.answer and self.type == "match_the_following":
             try:
-                return json.loads(self.answer)
+                # Handle string representation of dict
+                if isinstance(self.answer, str) and self.answer.startswith('{'):
+                    return json.loads(self.answer.replace("'", '"'))
+                return self.answer
             except:
                 return self.answer
         return self.answer
@@ -70,7 +73,17 @@ class QuestionModel(Base):
 
     def get_match_pairs(self):
         """Deserialize matching pairs from JSON string"""
-        return json.loads(self.match_the_following_pairs) if self.match_the_following_pairs else None
+        if self.match_the_following_pairs:
+            try:
+                return json.loads(self.match_the_following_pairs)
+            except:
+                try:
+                    # Try parsing Python string dict format
+                    cleaned = self.match_the_following_pairs.replace("'", '"')
+                    return json.loads(cleaned)
+                except:
+                    return None
+        return None
 
     def set_sequence_items(self, items):
         """Serialize sequence items to JSON string"""
