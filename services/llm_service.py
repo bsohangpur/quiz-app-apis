@@ -97,30 +97,37 @@ class LLMService:
             Important: Generate questions ONLY of the specified type: {question_type}
 
             Follow these format rules based on question_type:
-            - For "mcq": 
-                - Include "options" array with exactly 4 choices
-                - "answer" should be one of the options
-            - For "true_false": 
-                - "answer" should be either "True" or "False"
-            - For "sequence": 
-                - Provide "sequence_items" as array of ordered items
-                - "answer" should be array of items in correct order
+            - For MCQ questions:
+                - Question type must be "MCQ" (uppercase)
+                - Must include "options" array with exactly 4 choices
+                - Options must be properly formatted
                 Example:
-                "sequence_items": [
-                    {{"id": "1", "content": "First step"}},
-                    {{"id": "2", "content": "Second step"}},
-                    {{"id": "3", "content": "Third step"}}
-                ],
-                "answer": ["First step", "Second step", "Third step"]
-            - For "match_the_following":
-                - Provide pairs to match in "match_the_following_pairs"
-                - "answer" should be object with correct matches
+                {{
+                    "question": "What is X?",
+                    "type": "MCQ",
+                    "options": [
+                        "Option A",
+                        "Option B",
+                        "Option C",
+                        "Option D"
+                    ],
+                    "answer": "Option A",
+                    "explanation": "Explanation here"
+                }}
+
+            - For match_the_following:
+                - Must include match_the_following_pairs with left/right arrays
                 Example:
-                "match_the_following_pairs": {{
-                    "left": ["A", "B", "C"],
-                    "right": ["1", "2", "3"]
-                }},
-                "answer": {{"A": "1", "B": "2", "C": "3"}}
+                {{
+                    "question": "Match the following...",
+                    "type": "match_the_following",
+                    "match_the_following_pairs": {{
+                        "left": ["A", "B", "C"],
+                        "right": ["1", "2", "3"]
+                    }},
+                    "answer": {{"A": "1", "B": "2", "C": "3"}},
+                    "explanation": "Explanation here"
+                }}
 
             Context to use for questions: {context}
 
@@ -129,16 +136,20 @@ class LLMService:
                 "questions": [
                     {{
                         "question": "question text",
-                        "type": "{question_type}",
-                        "answer": "answer in format specified above",
-                        "explanation": "detailed explanation",
-                        // Include only the relevant field based on question_type:
+                        "type": "MCQ",  // or other type
+                        "answer": "answer text",
+                        "explanation": "explanation text",
                         "options": ["A", "B", "C", "D"],  // For MCQ only
                         "match_the_following_pairs": {{...}},  // For match_the_following only
                         "sequence_items": [...] // For sequence only
                     }}
                 ]
             }}
+
+            Ensure that:
+            1. MCQ questions MUST have options array
+            2. All JSON is properly formatted
+            3. Question types are consistent (MCQ in uppercase)
             """
         )
 

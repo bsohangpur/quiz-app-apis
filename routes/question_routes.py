@@ -96,8 +96,8 @@ def generate_questions():
             question_model.set_answer(question.get("answer"))
             
             # Handle different question types
-            if question["type"] == "mcq":
-                question_model.set_options(question.get("options"))
+            if question["type"].upper() == "MCQ":  # Make case-insensitive comparison
+                question_model.set_options(question.get("options", []))
             elif question["type"] == "match_the_following":
                 question_model.set_match_pairs(question.get("match_the_following_pairs"))
             elif question["type"] == "sequence":
