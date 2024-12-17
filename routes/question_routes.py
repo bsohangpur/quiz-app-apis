@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from services.llm_service import LLMService
 from PyPDF2 import PdfReader
-from models.models import QuestionModel, SessionModel, db_session
+from models.models import SessionModel, db_session
 from typing import List, Dict
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -79,32 +79,10 @@ def generate_questions():
                 num_questions=data["num_questions"]
             )
 
-        # Create session and store questions
+        # Create session and store questions as JSON
         session = SessionModel()
+        session.set_questions(questions)
         db_session.add(session)
-        db_session.commit()
-
-        for question in questions:
-            question_model = QuestionModel(
-                session_id=session.id,
-                question=question["question"],
-                type=question["type"],
-                explanation=question.get("explanation"),
-            )
-            
-            # Set answer using the new method
-            question_model.set_answer(question.get("answer"))
-            
-            # Handle different question types
-            if question["type"].upper() == "MCQ":  # Make case-insensitive comparison
-                question_model.set_options(question.get("options", []))
-            elif question["type"] == "match_the_following":
-                question_model.set_match_pairs(question.get("match_the_following_pairs"))
-            elif question["type"] == "sequence":
-                question_model.set_sequence_items(question.get("sequence_items"))
-
-            db_session.add(question_model)
-
         db_session.commit()
 
         return jsonify({
@@ -139,46 +117,15 @@ def upload_context():
 @question_bp.route("/quiz/<string:quiz_id>", methods=["GET"])
 def get_questions(quiz_id):
     try:
-        questions = db_session.query(QuestionModel).filter_by(session_id=quiz_id).all()
+        session = db_session.query(SessionModel).filter_by(id=quiz_id).first()
         
-        if not questions:
-            return jsonify({"success": False, "error": "No questions found"}), 404
+        if not session:
+            return jsonify({"success": False, "error": "Quiz not found"}), 404
 
-        question_list = []
-        for question in questions:
-            question_data = {
-                "question": question.question,
-                "type": question.type,
-                "answer": question.get_answer(),
-                "explanation": question.explanation,
-            }
-
-            # Add type-specific data
-            if question.type == "MCQ":
-                question_data["options"] = question.get_options()
-            elif question.type == "match_the_following":
-                pairs = question.get_match_pairs()
-                if isinstance(pairs, dict):
-                    question_data["match_the_following_pairs"] = {
-                        "left": pairs.get("left", []),
-                        "right": pairs.get("right", [])
-                    }
-                    # Convert string answer back to dict if needed
-                    answer = question.get_answer()
-                    if isinstance(answer, str) and answer.startswith('{'):
-                        try:
-                            answer = json.loads(answer.replace("'", '"'))
-                        except:
-                            pass
-                    question_data["answer"] = answer
-            elif question.type == "sequence":
-                question_data["sequence_items"] = question.get_sequence_items()
-
-            question_list.append(question_data)
-
+        questions = session.get_questions()
         return jsonify({
             "success": True,
-            "questions": question_list
+            "questions": questions
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -190,43 +137,34 @@ def evaluate_answers(quiz_id):
         if not user_answers:
             return jsonify({"success": False, "error": "No answers provided"}), 400
 
-        # Get original questions from database
-        questions = db_session.query(QuestionModel).filter_by(session_id=quiz_id).all()
-        if not questions:
+        # Get questions from session
+        session = db_session.query(SessionModel).filter_by(id=quiz_id).first()
+        if not session:
             return jsonify({"success": False, "error": "Quiz not found"}), 404
 
-        # Evaluate each answer using LLM service
+        questions = session.get_questions()
+
+        # Evaluate each answer
         evaluation_results = []
         for q, user_answer in zip(questions, user_answers):
-            question_data = {
-                "question": q.question,
-                "type": q.type,
-                "answer": q.get_answer(),
-                "options": q.get_options(),
-                "match_the_following_pairs": q.get_match_pairs(),
-                "sequence_items": q.get_sequence_items()
-            }
-            
-            result = llm_service.evaluate_answer(question_data, user_answer["answer"])
+            result = llm_service.evaluate_answer(q, user_answer["answer"])
             evaluation_results.append({
-                "question": q.question,
+                "question": q["question"],
                 "user_answer": user_answer["answer"],
-                "correct_answer": q.answer,
+                "correct_answer": q["answer"],
                 "is_correct": result["is_correct"],
                 "explanation": result["explanation"]
             })
 
-        # Calculate overall score and rank
+        # Calculate overall score
         score_data = llm_service.calculate_quiz_score(evaluation_results)
 
-        response = {
+        return jsonify({
             "success": True,
             "quiz_id": quiz_id,
             **score_data,
             "detailed_results": evaluation_results
-        }
-
-        return jsonify(response)
+        })
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

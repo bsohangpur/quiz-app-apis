@@ -15,38 +15,12 @@ branch_labels = None
 depends_on = None
 
 def upgrade() -> None:
-    # Create users table
-    op.create_table('users',
-        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('email', sa.String(length=255), nullable=False),
-        sa.Column('password', sa.String(length=255), nullable=False),
-        sa.Column('name', sa.String(length=100), nullable=False),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('email')
-    )
-
-    # Create sessions table
+    # Create sessions table with JSON storage
     op.create_table('sessions',
         sa.Column('id', sa.String(length=36), nullable=False),
-        sa.PrimaryKeyConstraint('id')
-    )
-
-    # Create questions table
-    op.create_table('questions',
-        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('session_id', sa.String(length=36), nullable=False),
-        sa.Column('question', sa.Text(), nullable=False),
-        sa.Column('type', sa.String(length=50), nullable=False),
-        sa.Column('answer', sa.Text(), nullable=False),
-        sa.Column('explanation', sa.Text(), nullable=True),
-        sa.Column('options', sa.Text(), nullable=True),
-        sa.Column('match_the_following_pairs', sa.Text(), nullable=True),
-        sa.Column('sequence_items', sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(['session_id'], ['sessions.id'], ),
+        sa.Column('questions_json', sa.Text(), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )
 
 def downgrade() -> None:
-    op.drop_table('questions')
-    op.drop_table('sessions')
-    op.drop_table('users') 
+    op.drop_table('sessions') 
