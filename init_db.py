@@ -1,9 +1,9 @@
-from models.models import  User, Session, Question, Base, engine
+from models.models import Base, engine
 
-def setup_database():
-    print("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
-    print("Database tables created successfully!")
+def init_db():
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
 
 if __name__ == "__main__":
-    setup_database() 
+    init_db()
+    print("Database initialized successfully!") 
