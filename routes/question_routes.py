@@ -3,6 +3,9 @@ from services.llm_service import LLMService
 from PyPDF2 import PdfReader
 from models.models import QuestionModel, SessionModel, db_session
 from typing import List, Dict
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+import os
 
 question_bp = Blueprint("questions", __name__)
 llm_service = LLMService(provider="openai")  # or "openai"
@@ -13,46 +16,57 @@ def generate_questions():
     try:
         if request.files:
             file = request.files["file"]
-            num_questions = request.form.get("num_questions")
-            question_type = request.form.get("question_type")
-            quizs = []
+            num_questions = int(request.form.get("num_questions", 5))
+            question_type = request.form.get("question_type", "mcq")
+            difficulty = request.form.get("difficulty", "medium")
 
-            if file.filename.endswith(".pdf"):
-                pdf_reader = PdfReader(file)
-                length_of_page_in_pdf = len(pdf_reader.pages)
-                text_content = ""
+            if not file.filename.endswith(".pdf"):
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid file format. File must be PDF."
+                }), 400
 
-                if length_of_page_in_pdf > 30:
-                    return (
-                        jsonify(
-                            {
-                                "success": False,
-                                "error": "File must have less than 30 pages",
-                            }
-                        ),
-                        400,
-                    )
+            # Save PDF temporarily
+            temp_path = "temp.pdf"
+            file.save(temp_path)
 
-                for page in pdf_reader.pages:
-                    text_content += page.extract_text()
+            try:
+                # Use Langchain's PDF loader
+                loader = PyPDFLoader(temp_path)
+                pages = loader.load()
 
-                context = llm_service.extract_context_from_text(
-                    text=text_content,
-                    question_quantity=int(num_questions),
+                # Check page limit
+                if len(pages) > 30:
+                    return jsonify({
+                        "success": False,
+                        "error": "File must have less than 30 pages"
+                    }), 400
+
+                # Split text into chunks
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=2000,
+                    chunk_overlap=200,
+                    length_function=len
+                )
+                texts = text_splitter.split_documents(pages)
+                
+                # Combine relevant chunks
+                combined_text = " ".join([doc.page_content for doc in texts])
+
+                # Generate questions using the same prompt as generate_questions
+                questions = llm_service.generate_questions(
+                    subject="Document Analysis",
+                    topic="PDF Content",
                     question_type=question_type,
+                    difficulty=difficulty,
+                    num_questions=num_questions,
+                    context=combined_text
                 )
 
-                quizs = context
-            else:
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "Invalid file format file must be pdf",
-                        }
-                    ),
-                    400,
-                )
+            finally:
+                # Clean up temp file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
 
         else:
             data = request.json
@@ -61,34 +75,43 @@ def generate_questions():
                 topic=data["topic"],
                 question_type=data["question_type"],
                 difficulty=data["difficulty"],
-                num_questions=data["num_questions"],
+                num_questions=data["num_questions"]
             )
 
-            # return jsonify({"success": True, "questions": questions})
-
-        
-        quizs = questions
-        session = SessionModel()  
+        # Create session and store questions
+        session = SessionModel()
         db_session.add(session)
         db_session.commit()
 
         for question in questions:
-            question_data = {
-                "session_id": session.id,
-                "question": question["question"],
-                "type": question["type"],
-                "answer": question.get("answer", " "),
-                "explanation": question.get("explanation"),
-                "options": question.get("options"),
-                "match_the_following_pairs": question.get("match_the_following_pairs"),
-                "correct_answer": question.get("correct_answer"),
-            }
-            quiz = QuestionModel(**question_data)
-            db_session.add(quiz)
+            question_model = QuestionModel(
+                session_id=session.id,
+                question=question["question"],
+                type=question["type"],
+                explanation=question.get("explanation"),
+            )
+            
+            # Set answer using the new method
+            question_model.set_answer(question.get("answer"))
+            
+            # Handle different question types
+            if question["type"] == "mcq":
+                question_model.set_options(question.get("options"))
+            elif question["type"] == "match_the_following":
+                question_model.set_match_pairs(question.get("match_the_following_pairs"))
+            elif question["type"] == "sequence":
+                question_model.set_sequence_items(question.get("sequence_items"))
 
-        db_session.commit() 
+            db_session.add(question_model)
 
-        return jsonify({"success": True, "questions": quizs, 'quiz_id':session.id})
+        db_session.commit()
+
+        return jsonify({
+            "success": True,
+            "questions": questions,
+            'quiz_id': session.id
+        })
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
@@ -115,26 +138,31 @@ def upload_context():
 @question_bp.route("/quiz/<string:quiz_id>", methods=["GET"])
 def get_questions(quiz_id):
     try:
-        quizs = []
         questions = db_session.query(QuestionModel).filter_by(session_id=quiz_id).all()
-
+        
         if not questions:
             return jsonify({"success": False, "error": "No questions found"}), 404
 
+        question_list = []
         for question in questions:
             question_data = {
                 "question": question.question,
                 "type": question.type,
                 "answer": question.answer,
                 "explanation": question.explanation,
-                "options": question.options,
-                "match_the_following_pairs": question.match_the_following_pairs,
-                "correct_answer": question.correct_answer,
             }
-            quizs.append(question_data)
-            
 
-        return jsonify({"success": True, "questions": quizs})
+            # Add type-specific data
+            if question.type == "mcq":
+                question_data["options"] = question.get_options()
+            elif question.type == "match_the_following":
+                question_data["match_the_following_pairs"] = question.get_match_pairs()
+            elif question.type == "sequence":
+                question_data["sequence_items"] = question.get_sequence_items()
+
+            question_list.append(question_data)
+
+        return jsonify({"success": True, "questions": question_list})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -156,9 +184,10 @@ def evaluate_answers(quiz_id):
             question_data = {
                 "question": q.question,
                 "type": q.type,
-                "answer": q.answer,
-                "options": q.options,
-                "match_the_following_pairs": q.match_the_following_pairs
+                "answer": q.get_answer(),
+                "options": q.get_options(),
+                "match_the_following_pairs": q.get_match_pairs(),
+                "sequence_items": q.get_sequence_items()
             }
             
             result = llm_service.evaluate_answer(question_data, user_answer["answer"])

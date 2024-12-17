@@ -1,7 +1,7 @@
 aiohappyeyeballs
 aiohttp
 aiosignal
-alembic
+alembic==1.13.1
 annotated-types
 anyio
 asgiref
@@ -10,7 +10,7 @@ blinker
 cachetools
 certifi
 charset-normalizer
-click
+click==8.1.7
 colorama
 dataclasses-json
 distro
@@ -40,7 +40,7 @@ jiter
 jsonpatch
 jsonpointer
 langchain
-langchain-community
+langchain-community>=0.0.10
 langchain-core
 langchain-google-genai
 langchain-openai
