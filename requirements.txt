@@ -89,3 +89,4 @@ uritemplate
 urllib3
 Werkzeug
 yarl
+Pillow==10.1.0
