@@ -12,6 +12,7 @@ import base64
 import io
 from PIL import Image
 
+
 def subjectTopicTemplate(subject, topic, questionType, questionQuantity):
     return f"""
         You are an expert teacher in {subject}, specifically in the topic of {topic}.
@@ -270,10 +271,10 @@ class LLMService:
         base64_str = ""
         mime_type = ""
 
-        if 'image' in user_answer:
-            base64_str = user_answer['image']
+        if "image" in user_answer:
+            base64_str = user_answer["image"]
             mime_type = self._get_media_type(base64_str)
-            if mime_type not in ['image/png', 'image/jpeg', 'image/gif', 'image/webp']:
+            if mime_type not in ["image/png", "image/jpeg", "image/gif", "image/webp"]:
                 return {
                     "is_correct": False,
                     "explanation": "Unsupported image format. Supported formats are: png, jpeg, gif, webp.",
@@ -308,66 +309,35 @@ class LLMService:
         messages = []
 
         if base64_str:
-                messages.append(
-                    HumanMessage(
-                        content=[
-                            {
-                                "type": "text",
-                                "text": "Here is the user's submitted image:",
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": base64_str
-                                }
-                            },
-                        ]
-                    )
+            messages.append(
+                HumanMessage(
+                    content=[
+                        {
+                            "type": "text",
+                            "text": "Here is the user's submitted image:",
+                        },
+                        {"type": "image_url", "image_url": {"url": base64_str}},
+                    ]
                 )
-
-        # evaluation_prompt = PromptTemplate.from_template(
-        #     """
-        #     Evaluate if the user's answer is correct for the given question.
-
-        #     Question: {question}
-        #     Correct Answer (Text/Image): {correct_answer}
-        #     User Answer (Text/Image): {user_answer}
-        #     Question Type: {question_type}
-
-        #     Consider the following criteria based on question type:
-        #     - For short answers: Check key concepts and factual accuracy.
-        #     - For long answers (text or text + image): Evaluate comprehension, completeness, and relevance. If an image is provided, assess its correctness and alignment with the question.
-        #     - For fill_in_blank: Check semantic correctness (text matching expected answer).
-        #     - For code questions: Check logic, syntax, and functional correctness.
-        #     - For diagram questions (image-only): Compare the user’s image to the correct answer for structure, proportions, and accuracy of labels or annotations.
-        #     - For long quiz with images: Evaluate both the textual accuracy and the correctness of the provided image.
-
-        #     Return the evaluation in this JSON format:
-        #     {{
-        #         "is_correct": true/false,
-        #         "explanation": "Brief explanation of why the answer is correct/incorrect, addressing both text and image as needed.",
-        #         "score": numerical_score_between_0_and_1
-        #     }}
-        #     """
-        # )
+            )
 
         evaluation_text = f"""
         Evaluate if the user's answer is correct for the given question.
-        
+
         Question: {question_data["question"]}
         Question Type: {question_data["type"]}
-        
+
         Correct Answer Text: {processed_correct_answer}
         User Answer Text: {processed_user_answer}
-        
+
         Consider the following criteria based on question type:
         - For short answers: Check key concepts and factual accuracy.
-        - For long answers (text or text + image): Evaluate comprehension, completeness, and relevance.
+        - For long answers (text, text + image, or only image): Evaluate comprehension, completeness, and relevance.
         - For fill_in_blank: Check semantic correctness.
         - For code questions: Check logic, syntax, and functional correctness.
         - For diagram questions: Compare the user's image to the correct answer for structure, proportions, and accuracy.
-        - For long quiz with images: Evaluate both the textual accuracy and image correctness.
-        
+        - For long quizzes (text, text + image, or only image): Evaluate textual accuracy, image correctness (if applicable), and overall relevance. Ensure the user's response fully addresses the question requirements.
+
         Return your evaluation in this JSON format:
         {{
             "is_correct": true/false,
@@ -377,24 +347,6 @@ class LLMService:
         """
 
         messages.append(HumanMessage(content=evaluation_text))
-
-        # try:
-        #     formatted_prompt = evaluation_prompt.format(
-        #         question=question_data["question"],
-        #         correct_answer=processed_correct_answer,
-        #         user_answer=processed_user_answer,
-        #         question_type=question_data["type"],
-        #     )
-
-        #     response = self.llm.invoke(formatted_prompt)
-        #     return self.output_parser.parse(response.content)
-
-        # except Exception as e:
-        #     return {
-        #         "is_correct": False,
-        #         "explanation": f"Error evaluating answer: {str(e)}",
-        #         "score": 0.0,
-        #     }
 
         try:
             response = self.llm.invoke(messages)
@@ -531,7 +483,7 @@ class LLMService:
 
         elif "image" in answer:
             del answer["image"]
-            del answer['image_data']
+            del answer["image_data"]
             return answer
 
         return answer
@@ -654,44 +606,3 @@ class LLMService:
             return media_type
         else:
             return None
-
-# for file
-# You are an expert teacher. Based on the following text, create {questionQuantity} {questionType} questions.
-# Each question should be challenging but appropriate for students studying this material.
-
-# Text: {text}
-
-# Return the response in the following JSON format:
-# {{
-#     "questions": [
-#         {{
-#             "question": "question text",
-#             "answer": "answer text",
-#             "options": ["Option A", "Option B", "Option C", "Option D"] // Only for multiple choice questions
-#             "explanation": "explanation text",
-#             "type":"which type of quiz generated from this only mcq, fill_in_blank, true_false, short, long, code, sequence, diagram, match_the_following"
-#         }}
-#     ]
-# }}
-
-# Ensure that the JSON is valid and can be parsed.
-
-# for data in data_list:
-
-# Generate {num_questions} {question_type} questions about {topic} in {subject}.
-# The questions should be at {difficulty} difficulty level.
-
-# Return the response in the following JSON format:
-# {{
-#     "questions": [
-#         {{
-#             "question": "question text",
-#             "answer": "answer text",
-#             "options": ["Option A", "Option B", "Option C", "Option D"] // Only for multiple choice questions
-#             "explanation": "explanation text",
-#             "type":"which type of quiz generated from this only mcq, fill_in_blank, true_false, short, long, code, sequence, diagram, match_the_following"
-#         }}
-#     ]
-# }}
-
-# Topic context: {context}
