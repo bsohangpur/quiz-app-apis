@@ -57,10 +57,10 @@ class LLMService:
             self.llm = ChatGoogleGenerativeAI(
                 model="gemini-1.5-flash",
                 google_api_key=os.getenv("GOOGLE_API_KEY"),
-                temperature=0.7,
+                temperature=0,
             )
         else:
-            self.llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+            self.llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
         self.question_prompt = PromptTemplate.from_template(
             """Generate {num_questions} {question_type} questions about {topic} in {subject}.
@@ -105,81 +105,99 @@ class LLMService:
                     Generate {num_questions} {question_type} questions about {topic} in {subject}.
                     The questions should be at {difficulty} difficulty level.
 
-                    Follow these format rules based on question_type:
-                    - For Long Answer questions:
-                        - Question type must be "Long Answer"
-                        - Should require a detailed explanation.
-                        Example:
-                        {{
-                            "question": "Explain the concept of...",
-                            "type": "Long Answer",
-                            "answer": "Detailed explanation here"
-                        }}
+                    Questions must strictly follow one of these types and formats:
 
-                    - For Diagram questions:
-                        - Question type must be "Diagram"
-                        - Should require a visual representation or diagram.
-                        Example:
-                        {{
-                            "question": "Draw a diagram illustrating...",
-                            "type": "Diagram",
-                            "answer": "Description of the diagram"
-                        }}
-
-                    - For MCQ questions:
-                        - Question type must be "MCQ" (uppercase)
-                        - Must include "options" array with exactly 4 choices
-                        - Options must be properly formatted
-                        Example:
+                    1. For "mcq":
                         {{
                             "question": "What is X?",
-                            "type": "MCQ",
-                            "options": [
-                                "Option A",
-                                "Option B",
-                                "Option C",
-                                "Option D"
-                            ],
+                            "type": "mcq",
+                            "options": ["Option A", "Option B", "Option C", "Option D"],
                             "answer": "Option A",
                             "explanation": "Explanation here"
                         }}
 
-                    - For match_the_following questions:
-                        - Question type must be "match_the_following"
-                        - Must include match_the_following_pairs with left/right arrays
-                        Example:
+                    2. For "fill_in_blank":
                         {{
-                            "question": "Match the following...",
+                            "question": "_____ is the capital of France.",
+                            "type": "fill_in_blank", 
+                            "answer": "Paris",
+                            "explanation": "Explanation here"
+                        }}
+
+                    3. For "true_false":
+                        {{
+                            "question": "The Earth is flat.",
+                            "type": "true_false",
+                            "answer": "false",
+                            "explanation": "Explanation here"
+                        }}
+
+                    4. For "short":
+                        {{
+                            "question": "Define photosynthesis.",
+                            "type": "short",
+                            "answer": "Brief definition here",
+                            "explanation": "Explanation here"
+                        }}
+
+                    5. For "long":
+                        {{
+                            "question": "Explain in detail how photosynthesis works.",
+                            "type": "long",
+                            "answer": "Detailed explanation here",
+                            "explanation": "Key points here"
+                        }}
+
+                    6. For "code":
+                        {{
+                            "question": "Write a function that...",
+                            "type": "code",
+                            "answer": "Code solution here",
+                            "explanation": "Code explanation here"
+                        }}
+
+                    7. For "sequence":
+                        {{
+                            "question": "Arrange the steps in order",
+                            "type": "sequence",
+                            "answer": [
+                                {{"id": "1", "content": "First step"}},
+                                {{"id": "2", "content": "Second step"}},
+                                {{"id": "3", "content": "Third step"}}
+                            ],
+                            "explanation": "Sequence explanation here"
+                        }}
+
+                    8. For "diagram":
+                        {{
+                            "question": "Draw a diagram of...",
+                            "type": "diagram",
+                            "answer": "Description of expected diagram",
+                            "explanation": "Diagram requirements here"
+                        }}
+
+                    9. For "match_the_following":
+                        {{
+                            "question": "Match the following items",
                             "type": "match_the_following",
                             "match_the_following_pairs": {{
                                 "left": ["A", "B", "C"],
                                 "right": ["1", "2", "3"]
                             }},
                             "answer": {{"A": "1", "B": "2", "C": "3"}},
-                            "explanation": "Explanation here"
+                            "explanation": "Matching explanation here"
                         }}
 
-                    Context to use for questions: {context}
+                    Context: {context}
 
-                    Return the response in the following JSON format:
+                    Return response as:
                     {{
                         "questions": [
-                            {{
-                                "question": "question text",
-                                "type": "{question_type}",
-                                "answer": "answer text",
-                                "explanation": "explanation text",
-                                "options": ["A", "B", "C", "D"],  // For MCQ only
-                                "match_the_following_pairs": {{...}},  // For match_the_following only
-                                "sequence_items": [...] // For sequence only
-                            }}
+                            // Array of question objects following above formats
                         ]
                     }}
 
-                    Ensure that:
-                    1. Question type is strictly one of the specified types ("Long Answer", "Diagram", "MCQ", "match_the_following").
-                    2. MCQ questions MUST have options array.
-                    3. All JSON is properly formatted.
+                    Ensure all JSON is valid and question types are exactly as specified.
                     """
                 )
 

@@ -7,10 +7,23 @@ import os
 from PIL import Image
 import io
 import base64
+import json
 
 
 question_bp = Blueprint("questions", __name__)
 llm_service = LLMService(provider="openai")  # or "openai"
+
+QUIZ_TYPES = [
+    "mcq",
+    "short",
+    "long",
+    "code",
+    "fill_in_blank",
+    "match_the_following",
+    "true_false",
+    "sequence",
+    "diagram",
+]
 
 
 def compress_image(image_file, max_size_mb=1):
@@ -64,6 +77,22 @@ def generate_questions():
             num_questions = int(request.form.get("num_questions", 5))
             question_type = request.form.get("question_type", "mcq")
             difficulty = request.form.get("difficulty", "medium")
+
+            try:
+                question_type = json.loads(question_type)
+            except:
+                pass
+
+            if not set(["mcq", "match_the_following", "true_false"]).issubset(QUIZ_TYPES):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Invalid question type. Must be one of 'mcq', 'short', 'long', 'code', 'fill_in_blank', 'match_the_following', 'true_false', 'sequence', 'diagram'.",
+                        }
+                    ),
+                    400,
+                )
 
             if not file.filename.endswith(".pdf"):
                 return (
@@ -123,10 +152,23 @@ def generate_questions():
 
         else:
             data = request.json
+            question_type = data["question_type"]
+
+            if not set(["mcq", "match_the_following", "true_false"]).issubset(QUIZ_TYPES):
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "error": "Invalid question type. Must be one of 'mcq', 'short', 'long', 'code', 'fill_in_blank', 'match_the_following', 'true_false', 'sequence', 'diagram'.",
+                        }
+                    ),
+                    400,
+                )
+
             questions = llm_service.generate_questions(
                 subject=data["subject"],
                 topic=data["topic"],
-                question_type=data["question_type"],
+                question_type=question_type,
                 difficulty=data["difficulty"],
                 num_questions=data["num_questions"],
             )
